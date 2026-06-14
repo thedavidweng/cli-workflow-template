@@ -1,0 +1,96 @@
+name: Go CI
+
+on:
+  workflow_call:
+    inputs:
+      os-matrix:
+        description: 'JSON array of OS to test on'
+        type: string
+        default: '["ubuntu-latest", "macos-latest", "windows-latest"]'
+      enable-golangci-lint:
+        description: 'Run golangci-lint'
+        type: boolean
+        default: true
+      golangci-lint-version:
+        description: 'golangci-lint version'
+        type: string
+        default: 'latest'
+      enable-gofmt:
+        description: 'Run explicit gofmt check'
+        type: boolean
+        default: true
+      enable-race:
+        description: 'Run tests with race detector'
+        type: boolean
+        default: true
+      enable-snapshot:
+        description: 'Build GoReleaser snapshot on main'
+        type: boolean
+        default: true
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: ${{ fromJson(inputs.os-matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - run: go mod download
+      - run: go vet ./...
+      - run: go test ./... ${{ inputs.enable-race && '-race' || '' }}
+      - run: go build ./...
+
+  lint:
+    if: inputs.enable-golangci-lint || inputs.enable-gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - run: go mod download
+
+      - name: Check formatting
+        if: inputs.enable-gofmt
+        run: test -z "$(gofmt -l .)"
+
+      - name: golangci-lint
+        if: inputs.enable-golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ inputs.golangci-lint-version }}
+
+  snapshot:
+    if: inputs.enable-snapshot && github.ref == 'refs/heads/main'
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: latest
+          args: build --snapshot --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
