@@ -39,7 +39,7 @@ jobs:
           cache: true
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Install syft
         if: inputs.enable-syft
