@@ -1,69 +1,170 @@
 # cli-workflow-template
 
-Reusable GitHub Actions workflows for Go CLI projects.
+Reusable GitHub Actions workflows for Go CLI projects. One place to define CI, release, and security scanning — all projects consume the same tested pipeline.
+
+## Architecture
+
+```
+cli-workflow-template/              ← you are here
+├── .github/workflows/
+│   ├── go-ci.yml                   test + lint + snapshot
+│   ├── go-release.yml              GoReleaser + cosign + SBOM
+│   └── go-codeql.yml               CodeQL security scanning
+│
+canvas-cli/                         ← each project is 3 lines per workflow
+├── .github/workflows/
+│   ├── ci.yml                      uses: .../go-ci.yml@main
+│   ├── release.yml                 uses: .../go-release.yml@main
+│   └── codeql.yml                  uses: .../go-codeql.yml@main
+```
+
+Every project gets the same pipeline: 3-OS test matrix, golangci-lint, race detector, GoReleaser snapshot, cosign signing, SBOM generation, and weekly CodeQL scans. No configuration needed — just call the workflow.
 
 ## Workflows
 
-### `go-ci.yml`
+### go-ci.yml
 
-CI workflow with test, lint, and snapshot build.
+Test, lint, and build on every push and PR. Builds a GoReleaser snapshot on `main` after tests pass.
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `os-matrix` | `["ubuntu-latest", "macos-latest", "windows-latest"]` | OS to test on |
+| `enable-golangci-lint` | `true` | Run golangci-lint |
+| `golangci-lint-version` | `latest` | golangci-lint version |
+| `enable-gofmt` | `true` | Explicit gofmt check |
+| `enable-race` | `true` | Race detector |
+| `enable-snapshot` | `true` | GoReleaser snapshot build |
+
+**Concurrency:** cancels in-progress runs on the same ref.
 
 ```yaml
+# Minimal — just works
 jobs:
   ci:
     uses: thedavidweng/cli-workflow-template/.github/workflows/go-ci.yml@main
 ```
 
-**Defaults:**
-- OS matrix: ubuntu, macos, windows
-- golangci-lint v9
-- gofmt check
-- Race detector
-- GoReleaser snapshot build (depends on test + lint)
+### go-release.yml
 
-### `go-release.yml`
+Release via GoReleaser on `v*` tag push. Includes cosign keyless signing, SBOM generation, pre-release tests, and Homebrew tap token verification.
 
-Release workflow with GoReleaser, cosign signing, and SBOM generation.
+| Input | Default | Description |
+|-------|---------|-------------|
+| `enable-syft` | `true` | Generate SBOM with syft |
+| `enable-pre-release-test` | `true` | Run tests before GoReleaser |
+| `enable-homebrew-verify` | `true` | Verify HOMEBREW_TAP_GITHUB_TOKEN |
+
+**Secrets:** `HOMEBREW_TAP_GITHUB_TOKEN`, `SCOOP_BUCKET_GITHUB_TOKEN` (both optional, inherited via `secrets: inherit`).
 
 ```yaml
+# Minimal — just works
 jobs:
   release:
     uses: thedavidweng/cli-workflow-template/.github/workflows/go-release.yml@main
     secrets: inherit
 ```
 
-**Defaults:**
-- Cosign keyless signing
-- Syft SBOM generation
-- Homebrew tap token verification
-- Pre-release test run
+### go-codeql.yml
 
-### `go-codeql.yml`
+CodeQL security scanning with `security-extended` queries.
 
-CodeQL security scanning for Go projects.
+| Input | Default | Description |
+|-------|---------|-------------|
+| `languages` | `go` | Language to scan |
 
 ```yaml
+# Caller workflow defines triggers
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * 1"
+
 jobs:
   analyze:
     uses: thedavidweng/cli-workflow-template/.github/workflows/go-codeql.yml@main
 ```
 
-**Defaults:**
-- Language: Go
-- Queries: security-extended
-- Schedule: weekly (Monday)
+## Projects
 
-## Usage
+| Project | Description | Binary | Notes |
+|---------|-------------|--------|-------|
+| [canvas-cli](https://github.com/thedavidweng/canvas-cli) | Agent-friendly CLI for Canvas LMS | `canvas` | |
+| [zenodo-cli](https://github.com/thedavidweng/zenodo-cli) | Agent-friendly CLI for Zenodo/InvenioRDM | `zenodo` | |
+| [monarchmoney-cli](https://github.com/thedavidweng/monarchmoney-cli) | Agent-friendly CLI for Monarch Money | `monarch` | |
+| [flickr-cli](https://github.com/thedavidweng/flickr-cli) | Agent-friendly CLI for Flickr | `flickr` | |
+| [money](https://github.com/thedavidweng/money) | Local-first personal finance backend | `money` | CodeQL + Website kept separate |
 
-See the workflow files for available inputs. All inputs have sensible defaults — most projects can call the workflows with no parameters.
+## Adding a New Project
 
-## Projects Using This
+1. Create the Go CLI repo with Cobra
+2. Add three workflow files:
 
-- [canvas-cli](https://github.com/thedavidweng/canvas-cli)
-- [zenodo-cli](https://github.com/thedavidweng/zenodo-cli)
-- [monarchmoney-cli](https://github.com/thedavidweng/monarchmoney-cli)
-- [flickr-cli](https://github.com/thedavidweng/flickr-cli)
-- [money](https://github.com/thedavidweng/money)
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  ci:
+    uses: thedavidweng/cli-workflow-template/.github/workflows/go-ci.yml@main
+```
+
+```yaml
+# .github/workflows/release.yml
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  release:
+    uses: thedavidweng/cli-workflow-template/.github/workflows/go-release.yml@main
+    secrets: inherit
+```
+
+```yaml
+# .github/workflows/codeql.yml
+name: CodeQL
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * 1"
+jobs:
+  analyze:
+    uses: thedavidweng/cli-workflow-template/.github/workflows/go-codeql.yml@main
+```
+
+3. Add to the projects table above.
+
+## Shared Conventions
+
+All projects using this template follow:
+
+- **Go version:** from `go.mod` (`go-version-file`)
+- **Module path:** `github.com/thedavidweng/<repo>`
+- **Binary:** built from `./cmd/<binary>`
+- **Homebrew:** distributed via [thedavidweng/homebrew-tap](https://github.com/thedavidweng/homebrew-tap)
+- **Changelog:** generated by [git-cliff](https://git-cliff.org/) with `make changelog`
+- **Signing:** cosign keyless (Sigstore)
+- **SBOM:** syft SPDX-JSON
+
+## Updating
+
+To update CI behavior for all projects, edit the workflow file here. Changes take effect on the next push/PR in each consuming project — no version bumps needed.
+
+```bash
+# Example: upgrade golangci-lint across all projects
+# Just change the default in go-ci.yml — done.
+```
 
 ## License
 
