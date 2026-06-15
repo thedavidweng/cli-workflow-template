@@ -39,6 +39,10 @@ on:
         description: 'Minimum coverage percentage'
         type: string
         default: '50'
+      codecov-token:
+        description: 'Codecov upload token. When set and enable-coverage is true, uploads coverage to Codecov.'
+        type: string
+        default: ''
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -79,6 +83,15 @@ jobs:
           fi
         env:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+
+      - name: Upload coverage to Codecov
+        if: inputs.enable-coverage && inputs.codecov-token != '' && matrix.os == 'ubuntu-latest' && !cancelled()
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ inputs.codecov-token }}
+          files: coverage.out
+          flags: go
+          fail_ci_if_error: false
 
   lint:
     if: inputs.enable-golangci-lint || inputs.enable-gofmt || inputs.enable-errcheck
