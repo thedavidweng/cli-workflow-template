@@ -81,7 +81,7 @@ jobs:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
 
       - name: Upload coverage to Codecov
-        if: inputs.enable-coverage && secrets.CODECOV_TOKEN != '' && matrix.os == 'ubuntu-latest' && !cancelled()
+        if: inputs.enable-coverage && matrix.os == 'ubuntu-latest' && !cancelled()
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
