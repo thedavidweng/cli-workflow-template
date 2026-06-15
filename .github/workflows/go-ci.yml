@@ -106,7 +106,7 @@ jobs:
       - name: errcheck
         if: inputs.enable-errcheck
         run: |
-          go install github.com/kisielk/errcheck@v0.6.3
+          go install github.com/kisielk/errcheck@v1.20.0
           errcheck ./...
 
   snapshot:
