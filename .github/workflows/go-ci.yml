@@ -27,6 +27,18 @@ on:
         description: 'Build GoReleaser snapshot on main'
         type: boolean
         default: true
+      enable-errcheck:
+        description: 'Run errcheck for unhandled errors'
+        type: boolean
+        default: false
+      enable-coverage:
+        description: 'Run coverage check'
+        type: boolean
+        default: false
+      coverage-threshold:
+        description: 'Minimum coverage percentage'
+        type: string
+        default: '50'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -51,8 +63,22 @@ jobs:
       - run: go test ./... ${{ inputs.enable-race && '-race' || '' }}
       - run: go build ./...
 
+      - name: Coverage report
+        if: inputs.enable-coverage && matrix.os == 'ubuntu-latest'
+        run: |
+          go test ./... -coverprofile=coverage.out -covermode=atomic
+          COVERAGE=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          THRESHOLD="${COVERAGE_THRESHOLD}"
+          if [ "$(echo "${COVERAGE} < ${THRESHOLD}" | bc -l)" -eq 1 ]; then
+            echo "::error::Coverage ${COVERAGE}% is below threshold ${THRESHOLD}%"
+            exit 1
+          fi
+        env:
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+
   lint:
-    if: inputs.enable-golangci-lint || inputs.enable-gofmt
+    if: inputs.enable-golangci-lint || inputs.enable-gofmt || inputs.enable-errcheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -73,6 +99,12 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: ${{ inputs.golangci-lint-version }}
+
+      - name: errcheck
+        if: inputs.enable-errcheck
+        run: |
+          go install github.com/kisielk/errcheck@latest
+          errcheck ./...
 
   snapshot:
     if: inputs.enable-snapshot && github.ref == 'refs/heads/main'
