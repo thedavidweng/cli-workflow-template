@@ -1,0 +1,290 @@
+name: Tauri CI
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version'
+        type: string
+        default: '24'
+      pnpm-version:
+        description: 'pnpm version'
+        type: string
+        default: '10.33.2'
+      rust-toolchain:
+        description: 'Rust toolchain'
+        type: string
+        default: 'stable'
+      rust-os-matrix:
+        description: 'JSON array of OSes for Rust checks'
+        type: string
+        default: '["ubuntu-22.04", "macos-14"]'
+      tauri-build-os-matrix:
+        description: 'JSON array of OSes for Tauri build checks'
+        type: string
+        default: '["ubuntu-22.04", "macos-14", "windows-latest"]'
+      cargo-manifest-path:
+        description: 'Cargo manifest path'
+        type: string
+        default: 'src-tauri/Cargo.toml'
+      cargo-workspace:
+        description: 'Rust cache workspace mapping'
+        type: string
+        default: './src-tauri -> target'
+      linux-apt-packages:
+        description: 'Linux packages needed for Tauri compile and build checks'
+        type: string
+        default: 'build-essential curl file patchelf libasound2-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev wget'
+      project-prepare-command:
+        description: 'Project-owned setup command for sidecars, models, or generated native assets'
+        type: string
+        default: ''
+      frontend-command:
+        description: 'Project-owned frontend CI command'
+        type: string
+        default: 'pnpm ci:frontend'
+      rust-command:
+        description: 'Project-owned Rust CI command'
+        type: string
+        default: 'pnpm ci:rust'
+      tauri-build-command:
+        description: 'Project-owned Tauri build validation command'
+        type: string
+        default: 'pnpm ci:tauri-build'
+      enable-workflow-lint:
+        description: 'Run actionlint and zizmor'
+        type: boolean
+        default: true
+      enable-frontend:
+        description: 'Run frontend-command'
+        type: boolean
+        default: true
+      enable-cargo-deny:
+        description: 'Run cargo-deny'
+        type: boolean
+        default: true
+      enable-rust:
+        description: 'Run rust-command on rust-os-matrix'
+        type: boolean
+        default: true
+      enable-tauri-build:
+        description: 'Run tauri-build-command on tauri-build-os-matrix'
+        type: boolean
+        default: false
+
+concurrency:
+  group: tauri-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-lint:
+    if: inputs.enable-workflow-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          actionlint_flags: ''
+
+      - name: zizmor
+        uses: zizmorcore/zizmor-action@v0.2.0
+        with:
+          persona: pedantic
+          min-severity: low
+
+  frontend:
+    if: inputs.enable-frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ inputs.pnpm-version }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run frontend CI
+        run: ${{ inputs.frontend-command }}
+
+  cargo-deny:
+    if: inputs.enable-cargo-deny
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check Rust dependencies
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: ${{ inputs.cargo-manifest-path }}
+
+  rust:
+    if: inputs.enable-rust
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(inputs.rust-os-matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ inputs.pnpm-version }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ inputs.rust-toolchain }}
+          components: rustfmt,clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ github.workflow }}-${{ matrix.os }}-rust
+          workspaces: ${{ inputs.cargo-workspace }}
+          cache-bin: false
+
+      - name: Install Linux Tauri dependencies
+        if: runner.os == 'Linux' && inputs.linux-apt-packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.linux-apt-packages }}
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run project preparation
+        if: inputs.project-prepare-command != ''
+        run: ${{ inputs.project-prepare-command }}
+
+      - name: Run Rust CI
+        run: ${{ inputs.rust-command }}
+
+  tauri-build:
+    if: inputs.enable-tauri-build
+    needs:
+      - frontend
+      - cargo-deny
+      - rust
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJson(inputs.tauri-build-os-matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ inputs.pnpm-version }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ inputs.rust-toolchain }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ github.workflow }}-${{ matrix.os }}-tauri-build
+          workspaces: ${{ inputs.cargo-workspace }}
+          cache-bin: false
+
+      - name: Install Linux Tauri dependencies
+        if: runner.os == 'Linux' && inputs.linux-apt-packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.linux-apt-packages }}
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run project preparation
+        if: inputs.project-prepare-command != ''
+        run: ${{ inputs.project-prepare-command }}
+
+      - name: Validate Tauri build
+        run: ${{ inputs.tauri-build-command }}
+
+  validate:
+    if: always()
+    needs:
+      - workflow-lint
+      - frontend
+      - cargo-deny
+      - rust
+      - tauri-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check required jobs
+        env:
+          ENABLE_WORKFLOW_LINT: ${{ inputs.enable-workflow-lint }}
+          ENABLE_FRONTEND: ${{ inputs.enable-frontend }}
+          ENABLE_CARGO_DENY: ${{ inputs.enable-cargo-deny }}
+          ENABLE_RUST: ${{ inputs.enable-rust }}
+          ENABLE_TAURI_BUILD: ${{ inputs.enable-tauri-build }}
+          WORKFLOW_LINT_RESULT: ${{ needs.workflow-lint.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          CARGO_DENY_RESULT: ${{ needs.cargo-deny.result }}
+          RUST_RESULT: ${{ needs.rust.result }}
+          TAURI_BUILD_RESULT: ${{ needs.tauri-build.result }}
+        run: |
+          set -euo pipefail
+
+          check_enabled_job() {
+            local enabled="$1"
+            local name="$2"
+            local result="$3"
+
+            echo "${name}: ${result} (enabled=${enabled})"
+            if [ "${enabled}" = "true" ] && [ "${result}" != "success" ]; then
+              echo "::error title=${name} failed::Expected ${name} to succeed, got ${result}."
+              exit 1
+            fi
+          }
+
+          check_enabled_job "${ENABLE_WORKFLOW_LINT}" "workflow-lint" "${WORKFLOW_LINT_RESULT}"
+          check_enabled_job "${ENABLE_FRONTEND}" "frontend" "${FRONTEND_RESULT}"
+          check_enabled_job "${ENABLE_CARGO_DENY}" "cargo-deny" "${CARGO_DENY_RESULT}"
+          check_enabled_job "${ENABLE_RUST}" "rust" "${RUST_RESULT}"
+          check_enabled_job "${ENABLE_TAURI_BUILD}" "tauri-build" "${TAURI_BUILD_RESULT}"

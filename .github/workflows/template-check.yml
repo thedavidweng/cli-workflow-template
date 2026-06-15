@@ -1,0 +1,26 @@
+name: Template Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate template contracts
+        run: bash scripts/validate-template.sh
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+
+      - name: Run actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
