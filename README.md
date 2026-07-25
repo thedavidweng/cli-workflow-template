@@ -42,6 +42,7 @@ Test, lint, and build Go projects on every push and PR. Builds a GoReleaser snap
 | `enable-gofmt` | `true` | Explicit gofmt check |
 | `enable-race` | `true` | Race detector |
 | `enable-snapshot` | `true` | GoReleaser snapshot build |
+| `enable-conventions` | `false` | Enforce comment budget and forbid per-tool agent instruction files |
 
 **Concurrency:** cancels in-progress runs on the same ref.
 

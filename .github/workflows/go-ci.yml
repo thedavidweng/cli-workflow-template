@@ -39,6 +39,10 @@ on:
         description: 'Minimum coverage percentage'
         type: string
         default: '50'
+      enable-conventions:
+        description: 'Enforce comment budget and forbid per-tool agent instruction files'
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -138,3 +142,21 @@ jobs:
           args: build --snapshot --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  conventions:
+    if: inputs.enable-conventions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Conventions
+        run: |
+          for f in CLAUDE.md .cursorrules .windsurfrules .clinerules GEMINI.md; do
+            if [ -e "$f" ]; then echo "forbidden per-tool agent file: $f (use AGENTS.md)"; exit 1; fi
+          done
+          files=$(find cmd internal -name '*.go' ! -name '*_test.go')
+          total=$(cat $files | grep -cv '^[[:space:]]*$')
+          comments=$(cat $files | grep -E '^[[:space:]]*//' | grep -cvE '^[[:space:]]*//(go:|nolint)' || true)
+          if [ "$comments" -gt $((total * 5 / 100)) ]; then
+            echo "comment budget exceeded: $comments comment lines > 5% of $total code lines"; exit 1
+          fi
