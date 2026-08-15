@@ -88,7 +88,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
@@ -98,7 +98,7 @@ jobs:
           actionlint_flags: ''
 
       - name: zizmor
-        uses: zizmorcore/zizmor-action@v0.2.0
+        uses: zizmorcore/zizmor-action@v0.6.2
         with:
           persona: pedantic
           min-severity: low
@@ -108,15 +108,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.10
         with:
           version: ${{ inputs.pnpm-version }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: ${{ inputs.node-version }}
           cache: pnpm
@@ -133,12 +133,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
       - name: Check Rust dependencies
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
         with:
           manifest-path: ${{ inputs.cargo-manifest-path }}
 
@@ -151,15 +151,15 @@ jobs:
       matrix:
         os: ${{ fromJson(inputs.rust-os-matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.10
         with:
           version: ${{ inputs.pnpm-version }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: ${{ inputs.node-version }}
           cache: pnpm
@@ -170,7 +170,7 @@ jobs:
           toolchain: ${{ inputs.rust-toolchain }}
           components: rustfmt,clippy
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@v2.9.2
         with:
           shared-key: ${{ github.workflow }}-${{ matrix.os }}-rust
           workspaces: ${{ inputs.cargo-workspace }}
@@ -205,15 +205,15 @@ jobs:
       matrix:
         os: ${{ fromJson(inputs.tauri-build-os-matrix) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.10
         with:
           version: ${{ inputs.pnpm-version }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: ${{ inputs.node-version }}
           cache: pnpm
@@ -223,7 +223,7 @@ jobs:
         with:
           toolchain: ${{ inputs.rust-toolchain }}
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@v2.9.2
         with:
           shared-key: ${{ github.workflow }}-${{ matrix.os }}-tauri-build
           workspaces: ${{ inputs.cargo-workspace }}
