@@ -93,7 +93,7 @@ jobs:
           persist-credentials: false
 
       - name: actionlint
-        uses: reviewdog/action-actionlint@v1
+        uses: reviewdog/action-actionlint@v1.73.2
         with:
           actionlint_flags: ''
 

@@ -112,7 +112,7 @@ jobs:
 
       - name: golangci-lint
         if: inputs.enable-golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: ${{ inputs.golangci-lint-version }}
 
@@ -136,7 +136,7 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - uses: goreleaser/goreleaser-action@v7
+      - uses: goreleaser/goreleaser-action@v7.2.3
         with:
           version: latest
           args: build --snapshot --clean
