@@ -82,7 +82,7 @@ permissions:
 jobs:
   workflow-lint:
     if: inputs.enable-workflow-lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions:
       contents: read
@@ -253,7 +253,7 @@ jobs:
       - cargo-deny
       - rust
       - tauri-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: Check required jobs
