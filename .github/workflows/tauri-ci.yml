@@ -82,7 +82,7 @@ permissions:
 jobs:
   workflow-lint:
     if: inputs.enable-workflow-lint
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
