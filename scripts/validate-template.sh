@@ -6,7 +6,7 @@ fail() {
   exit 1
 }
 
-grep -q 'uses: sigstore/cosign-installer@v4\.[0-9]\+\.[0-9]\+' .github/workflows/go-release.yml \
+grep -Eq 'uses: sigstore/cosign-installer@([0-9a-f]{40} # v4\.[0-9]+\.[0-9]+|v4\.[0-9]+\.[0-9]+)' .github/workflows/go-release.yml \
   || fail 'go-release.yml must pin sigstore/cosign-installer to an existing patch tag'
 
 grep -q 'MIT License' LICENSE \
